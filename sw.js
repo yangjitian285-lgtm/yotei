@@ -1,6 +1,6 @@
 // オフラインでも開けるようにするための Service Worker
 // アプリを更新したら VERSION の数字を上げてください
-const VERSION = 'yotei-v2';
+const VERSION = 'yotei-v3';
 const SHELL = [
   './', './index.html', './style.css', './app.js', './backend-local.js', './backend-firebase.js',
   './firebase-config.js', './manifest.webmanifest', './icons/icon-192.png', './icons/apple-touch-icon.png',
