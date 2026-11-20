@@ -70,7 +70,7 @@ function authError(e) {
 // ================= 状態 =================
 const S = {
   user: null, profile: null, couple: null,
-  shared: [], priv: [], annivs: [], myAnnivs: [], activity: [],
+  shared: [], priv: [], annivs: [], myAnnivs: [], activity: [], templates: [],
   ready: { profile: false, couple: false },
   solo: lsGet(SOLO_FLAG) === '1',
   tab: 'home', month: (() => { const d = new Date(); d.setDate(1); return ymd(d); })(),
@@ -91,7 +91,7 @@ function prof(uid) {
 
 B.onAuth((user) => {
   clearSubs(subs); clearSubs(coupleSubs); coupleId = null;
-  Object.assign(S, { user, profile: null, couple: null, shared: [], priv: [], annivs: [], myAnnivs: [], activity: [], ready: { profile: false, couple: false }, sessionSeen: null });
+  Object.assign(S, { user, profile: null, couple: null, shared: [], priv: [], annivs: [], myAnnivs: [], activity: [], templates: [], ready: { profile: false, couple: false }, sessionSeen: null });
   if (!user || !user.verified) return render(true);
   subs.push(B.watchProfile(user.uid, (p) => {
     S.profile = p; S.ready.profile = true;
@@ -100,6 +100,7 @@ B.onAuth((user) => {
   }));
   subs.push(B.watchPrivateEvents(user.uid, (l) => { S.priv = l; render(); }));
   subs.push(B.watchMyAnniversaries(user.uid, (l) => { S.myAnnivs = l; render(); }));
+  subs.push(B.watchTemplates(user.uid, (l) => { S.templates = l.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'ja')); render(); }));
   subs.push(B.watchCouple(user.uid, (c) => {
     S.couple = c; S.ready.couple = true;
     if ((c?.id || null) !== coupleId) subscribeCouple(c);
@@ -591,6 +592,13 @@ function settingsView() {
     <div class="act"><span class="dot" style="--c:${a.color}"></span><span><b>${esc(a.name)}</b>${useDemo ? '' : `<br><small>${esc(S.user.email)}</small>`}</span><button class="chip" id="editProf">変更</button></div>
   </div>
 
+  <h3 class="sec">よく使う予定</h3>
+  <div class="card list">
+    ${S.templates.length ? S.templates.map((t) => `
+      <div class="act"><span class="dot" style="--c:${tplColor(t)}"></span><span>${esc(t.title)}<br><small>${esc(tplTime(t))}${t.place ? ' ・ ' + esc(t.place) : ''}</small></span><button class="chip" data-del-tpl="${esc(t.id)}">削除</button></div>`).join('')
+      : '<p class="muted small">予定を追加するときに「よく使う予定として保存」にチェックすると、ここに登録されます。次からは予定の追加画面でタップするだけで入力できます。</p>'}
+  </div>
+
   <h3 class="sec">共有</h3>
   <div class="card form">
     ${b ? `<p><span class="dot" style="--c:${b.color}"></span> <b>${esc(b.name)}</b>さんと共有中</p>
@@ -673,6 +681,11 @@ function bind(scr) {
   if (S.tab === 'set') {
     $('#editProf').onclick = openProfileModal;
     $('#startShare') && ($('#startShare').onclick = () => { S.solo = false; lsSet(SOLO_FLAG, null); render(true); });
+    $$('[data-del-tpl]').forEach((b) => (b.onclick = async () => {
+      const t = S.templates.find((x) => x.id === b.dataset.delTpl);
+      if (!t || !confirm(`よく使う予定「${t.title}」を削除しますか?\n(入れた予定は消えません)`)) return;
+      try { await B.deleteTemplate(me(), t.id); toast('削除しました'); } catch (er) { toast(authError(er)); }
+    }));
     $('#askNotif') && ($('#askNotif').onclick = async () => {
       try { await Notification.requestPermission(); } catch {}
       render();
@@ -709,6 +722,12 @@ function closeModal() {
   document.body.classList.remove('noscroll');
 }
 
+// ---- よく使う予定(テンプレート) ----
+const MAX_TPL = 30;
+const tplTime = (t) => (t.allDay ? '終日' : [t.startTime, t.endTime].filter(Boolean).join('〜') || '時間未定');
+const tplOwner = (t) => (!paired() ? me() : t.ownerKind === 'both' ? 'both' : t.ownerKind === 'partner' ? partner() : me());
+const tplColor = (t) => prof(tplOwner(t)).color;
+
 function openEventModal(ev, date) {
   if (ev && isPartnerBusy(ev)) {
     const o = prof(ev.owner);
@@ -728,7 +747,10 @@ function openEventModal(ev, date) {
     <form id="evForm">
       <div class="sheet-h"><button type="button" class="link" data-close>キャンセル</button><b>${ev ? '予定を編集' : '予定を追加'}</b><button class="link strong" type="submit">保存</button></div>
       <div class="form">
-        <input name="title" placeholder="タイトル" maxlength="100" value="${esc(e.title)}" required>
+        ${!ev && S.templates.length ? `<div class="lbl">よく使う予定(タップで入力)</div>
+        <div class="tpl-row">${S.templates.map((t) => `<button type="button" class="chip tpl" data-tpl="${esc(t.id)}" style="--c:${tplColor(t)}">${esc(t.title)}<small>${esc(tplTime(t))}</small></button>`).join('')}</div>` : ''}
+        <input name="title" placeholder="タイトル" maxlength="100" value="${esc(e.title)}" required autocomplete="off">
+        ${!ev ? '<div class="suggest" hidden></div>' : ''}
         ${paired() ? `<div class="lbl">だれの予定?</div>
         <div class="seg">${owners.map(([v, l]) => `<label style="--c:${prof(v).color}"><input type="radio" name="owner" value="${esc(v)}" ${e.owner === v ? 'checked' : ''}><span>${esc(l)}</span></label>`).join('')}</div>` : `<input type="hidden" name="owner" value="${esc(uid)}">`}
         <div class="row2">
@@ -751,6 +773,7 @@ function openEventModal(ev, date) {
           </div>
           <p class="muted small vis-help"></p>
         </div>` : '<input type="hidden" name="visibility" value="private">'}
+        ${S.templates.length < MAX_TPL ? '<label class="check"><input type="checkbox" name="saveTpl"> よく使う予定として保存(次から日付以外を自動入力)</label>' : ''}
         ${edited}
         ${ev ? '<button type="button" class="btn danger" id="delEv">この予定を削除</button>' : ''}
       </div>
@@ -773,7 +796,59 @@ function openEventModal(ev, date) {
     f.addEventListener('change', sync);
     f.startDate.addEventListener('change', () => { if (!ev || f.endDate.value < f.startDate.value) f.endDate.value = f.startDate.value; sync(); });
     sync();
-    if (!ev) setTimeout(() => f.title.focus(), 250);
+    // テンプレートや過去の予定から、日付以外を入力する
+    const fillFrom = (t, owner) => {
+      f.title.value = t.title;
+      f.allDay.checked = !!t.allDay;
+      f.startTime.value = t.allDay ? '' : t.startTime || '';
+      f.endTime.value = t.allDay ? '' : t.endTime || '';
+      f.place.value = t.place || '';
+      const o = f.querySelector(`[name=owner][value="${CSS.escape(owner || '')}"]`);
+      if (o) o.checked = true;
+      const v = f.querySelector(`[name=visibility][value="${CSS.escape(t.visibility || 'shared')}"]`);
+      if (v && v.type === 'radio') v.checked = true;
+      sync();
+    };
+    $$('[data-tpl]', root).forEach((b) => (b.onclick = () => {
+      const t = S.templates.find((x) => x.id === b.dataset.tpl);
+      if (!t) return;
+      fillFrom(t, tplOwner(t));
+      $$('[data-tpl]', root).forEach((x) => x.classList.toggle('on', x === b));
+    }));
+    // タイトルを入力すると、過去の同じタイトルの予定を候補に出す
+    const box = $('.suggest', root);
+    if (box) {
+      let cands = [];
+      const show = () => {
+        const q = f.title.value.trim();
+        if (!q) { box.hidden = true; return; }
+        const seen = new Set();
+        cands = allEvents()
+          .filter((x) => !isPartnerBusy(x) && x.title && x.title.includes(q))
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+          .filter((x) => {
+            const k = [x.title, x.allDay, x.startTime, x.endTime, x.place, x.owner].join('|');
+            if (seen.has(k)) return false;
+            seen.add(k); return true;
+          })
+          .slice(0, 5);
+        if (!cands.length || (cands.length === 1 && cands[0].title === q && box.dataset.picked === q)) { box.hidden = true; return; }
+        box.innerHTML = '<div class="lbl">過去の予定から入力</div>' + cands.map((x, i) => `
+          <button type="button" class="sug" data-sug="${i}" style="--c:${prof(x.owner).color}">
+            <b>${esc(x.title)}</b><small>${esc(tplTime(x))}${x.place ? ' ・ ' + esc(x.place) : ''}${paired() ? ' ・ ' + esc(prof(x.owner).name) : ''}</small>
+          </button>`).join('');
+        box.hidden = false;
+        $$('[data-sug]', box).forEach((b) => (b.onclick = () => {
+          const x = cands[Number(b.dataset.sug)];
+          if (!x) return;
+          fillFrom(x, x.owner);
+          box.dataset.picked = x.title;
+          box.hidden = true;
+        }));
+      };
+      f.title.addEventListener('input', () => { box.dataset.picked = ''; show(); });
+    }
+    if (!ev && !S.templates.length) setTimeout(() => f.title.focus(), 250);
     f.onsubmit = async (x) => {
       x.preventDefault();
       const btn = f.querySelector('[type=submit]'); btn.disabled = true;
@@ -783,6 +858,7 @@ function openEventModal(ev, date) {
           allDay: f.allDay.checked, startTime: f.startTime.value, endTime: f.endTime.value,
           place: f.place.value, note: f.note.value, visibility: val('visibility'),
         });
+        if (f.saveTpl?.checked) await saveTemplateFromForm(f, val);
         closeModal(); toast('保存しました');
       } catch (er) { toast(authError(er)); btn.disabled = false; }
     };
@@ -791,6 +867,23 @@ function openEventModal(ev, date) {
       try { await deleteEvent(ev); closeModal(); toast('削除しました'); } catch (er) { toast(authError(er)); }
     });
   });
+}
+
+async function saveTemplateFromForm(f, val) {
+  const owner = val('owner');
+  const t = {
+    title: f.title.value.trim().slice(0, 100),
+    allDay: f.allDay.checked,
+    startTime: f.allDay.checked ? '' : f.startTime.value,
+    endTime: f.allDay.checked ? '' : f.endTime.value,
+    place: f.place.value.trim().slice(0, 100),
+    ownerKind: !paired() || owner === me() ? 'me' : owner === 'both' ? 'both' : 'partner',
+    visibility: ['shared', 'busy', 'private'].includes(val('visibility')) ? val('visibility') : 'shared',
+  };
+  // 同じ内容のテンプレートがあれば上書き
+  const same = S.templates.find((x) => x.title === t.title && x.startTime === t.startTime && x.endTime === t.endTime && !!x.allDay === t.allDay);
+  try { await B.saveTemplate(me(), { id: same?.id || B.newId(), ...t }); }
+  catch (er) { toast('よく使う予定の保存に失敗: ' + authError(er)); }
 }
 
 function openAnnivModal(a) {

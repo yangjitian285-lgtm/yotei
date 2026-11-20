@@ -100,7 +100,7 @@ export async function unpair(cid) {
   emit();
 }
 
-const coll = (name, id) => (db[name][id] ??= {});
+const coll = (name, id) => ((db[name] ??= {})[id] ??= {});
 export const watchSharedEvents = (cid, cb) => watch(() => Object.values(coll('shared', cid)), cb);
 export const watchPrivateEvents = (uid, cb) => watch(() => Object.values(coll('priv', uid)), cb);
 export async function saveSharedEvent(cid, e) { coll('shared', cid)[e.id] = clone(e); emit(); }
@@ -119,6 +119,10 @@ export async function deleteMyAnniversary(uid, id) { delete coll('myannivs', uid
 export const watchActivity = (cid, cb) =>
   watch(() => Object.values(coll('activity', cid)).sort((a, b) => b.at - a.at).slice(0, 30), cb);
 export async function addActivity(cid, a) { coll('activity', cid)[a.id] = clone(a); emit(); }
+
+export const watchTemplates = (uid, cb) => watch(() => Object.values(coll('templates', uid)), cb);
+export async function saveTemplate(uid, t) { coll('templates', uid)[t.id] = clone(t); emit(); }
+export async function deleteTemplate(uid, id) { delete coll('templates', uid)[id]; emit(); }
 
 // ---- デモ専用 ----
 export function resetDemo() { db = seed(); emit(); }

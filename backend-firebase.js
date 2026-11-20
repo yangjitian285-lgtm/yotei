@@ -97,6 +97,13 @@ export function watchAnniversaries(cid, cb) {
 export const saveAnniversary = (cid, a) => F.setDoc(F.doc(db, 'couples', cid, 'anniversaries', a.id), clean(a));
 export const deleteAnniversary = (cid, id) => F.deleteDoc(F.doc(db, 'couples', cid, 'anniversaries', id));
 
+// よく使う予定(テンプレート)。本人だけが読み書きできる
+export function watchTemplates(uid, cb) {
+  return F.onSnapshot(F.collection(db, 'users', uid, 'templates'), (s) => cb(list(s)), warn);
+}
+export const saveTemplate = (uid, t) => F.setDoc(F.doc(db, 'users', uid, 'templates', t.id), clean(t));
+export const deleteTemplate = (uid, id) => F.deleteDoc(F.doc(db, 'users', uid, 'templates', id));
+
 // 自分だけの記念日(共有していないとき・共有しない記念日)
 export function watchMyAnniversaries(uid, cb) {
   return F.onSnapshot(F.collection(db, 'users', uid, 'anniversaries'), (s) => cb(list(s)), warn);

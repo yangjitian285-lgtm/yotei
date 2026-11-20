@@ -60,6 +60,14 @@ h1, h2, h3 { margin: 0; }
 .row { display: flex; gap: 8px; }
 .row > * { flex: 1; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tpl-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.tpl { border-left: 4px solid var(--c); text-align: left; padding: 6px 12px; }
+.chip.tpl small { display: block; font-size: 11px; color: var(--muted); }
+.chip.tpl.on { background: var(--accent-soft); border-color: var(--accent); }
+.suggest { display: flex; flex-direction: column; gap: 6px; margin-top: -4px; }
+.suggest .lbl { margin-bottom: 0; }
+.sug { display: flex; flex-direction: column; text-align: left; padding: 8px 12px; border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 10px; background: var(--bg); }
+.sug small { color: var(--muted); font-size: 12px; }
 
 .btn { display: block; width: 100%; text-align: center; padding: 12px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); font-weight: 600; margin-top: 4px; }
 .btn.primary { background: var(--accent); color: #fff; }
