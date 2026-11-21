@@ -287,13 +287,15 @@ function authView() {
     <img class="logo-img" src="icons/icon-192.png" alt="">
     <h1>よてい</h1>
     <p class="muted">シンプルなスケジュール帳。大切な人との共有もできます</p>
-    <form id="authForm" class="card form">
-      <label>メールアドレス<input name="email" type="email" autocomplete="email" required></label>
-      <label>パスワード${signup ? '(8文字以上・英字と数字をまぜて)' : ''}
-        <input name="pw" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="${signup ? 8 : 6}"></label>
-      ${signup ? '<label>パスワード(確認)<input name="pw2" type="password" autocomplete="new-password" required></label>' : ''}
+    <form id="authForm" class="card form" method="post" action="#" autocomplete="on">
+      <label for="email">メールアドレス</label>
+      <input id="email" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="off" spellcheck="false" required>
+      <label for="password">パスワード${signup ? '(8文字以上・英字と数字をまぜて)' : ''}</label>
+      <input id="password" name="pw" type="password" autocomplete="${signup ? 'new-password' : 'current-password'}" required minlength="${signup ? 8 : 6}">
+      ${signup ? '<label for="password2">パスワード(確認)</label><input id="password2" name="pw2" type="password" autocomplete="new-password" required>' : ''}
       <p class="err" id="authErr"></p>
       <button class="btn primary" type="submit">${signup ? '新規登録' : 'ログイン'}</button>
+      <p class="muted small">🔑 ログインすると、iPhoneが「パスワードを保存しますか?」と聞いてきます。「保存」を押すと、次からはキーボードの上の候補をタップするだけで入力できます(パスワードはiPhoneの「パスワード」アプリに安全に保管され、このアプリには保存しません)。一度ログインすれば、ログアウトするまでログインしたままです。</p>
       <button class="link" type="button" id="toggleMode">${signup ? 'アカウントをお持ちの方はこちら' : 'はじめての方は新規登録'}</button>
       ${signup ? '' : '<button class="link" type="button" id="resetPw">パスワードを忘れた</button>'}
     </form>
@@ -318,7 +320,13 @@ function bindAuth() {
       if (pw !== f.pw2.value) return (err.textContent = 'パスワード(確認)が一致しません');
     }
     btn.disabled = true;
-    try { authMode === 'signup' ? await B.signUp(email, pw) : await B.signIn(email, pw); }
+    try {
+      authMode === 'signup' ? await B.signUp(email, pw) : await B.signIn(email, pw);
+      // Chrome / Edge 向け:ブラウザのパスワード保存機能に渡す(アプリ自身は保存しない)
+      if (window.PasswordCredential && navigator.credentials?.store) {
+        navigator.credentials.store(new PasswordCredential({ id: email, password: pw, name: email })).catch(() => {});
+      }
+    }
     catch (e) { err.textContent = authError(e); btn.disabled = false; }
   };
 }
